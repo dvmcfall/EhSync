@@ -1,4 +1,4 @@
-FallDave.EhSync: Dubious fledgling `async`` utilities for C#
+FallDave.EhSync: Dubious fledgling `async` utilities for C#
 ============================================================
 
 Written in 2015 by [David McFall](mailto:dvmcfall@gmail.com)
