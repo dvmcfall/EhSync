@@ -126,6 +126,24 @@ namespace FallDave.EhSync
         }
 
         /// <summary>
+        /// Removes an item from this queue asynchronously.
+        /// </summary>
+        /// <param name="cancellationToken">
+        /// A cancellation token that can be used to interrupt the request.
+        /// </param>
+        /// <returns>A <see cref="Task{T}"/> whose result is an item removed from this queue.</returns>
+        /// <remarks>
+        /// The cancellation token only ever cancels an automatically triggered grow operation. If a
+        /// cancellation is received after the grow operation has acquired its lock, or if no grow
+        /// operation is triggered, the cancellation will be ignored and this method will return normally.
+        /// </remarks>
+        public async Task<T> DequeueAsync(CancellationToken cancellationToken)
+        {
+            var link = await EnsureGetUncounted(outputs, cancellationToken);
+            return await link.Task;
+        }
+
+        /// <summary>
         /// Adds a new item to this queue asynchronously.
         /// </summary>
         /// <param name="item">
@@ -135,6 +153,27 @@ namespace FallDave.EhSync
         public async Task EnqueueAsync(T item)
         {
             var link = await EnsureGetUncounted(inputs);
+            link.SetResult(item);
+        }
+
+        /// <summary>
+        /// Adds a new item to this queue asynchronously.
+        /// </summary>
+        /// <param name="item">
+        /// An item to be added to this queue. <see langword="null"/> values are allowed.
+        /// </param>
+        /// <param name="cancellationToken">
+        /// A cancellation token that can be used to interrupt the request.
+        /// </param>
+        /// <returns>A task to await the item being added to this queue.</returns>
+        /// <remarks>
+        /// The cancellation token only ever cancels an automatically triggered grow operation. If a
+        /// cancellation is received after the grow operation has acquired its lock, or if no grow
+        /// operation is triggered, the cancellation will be ignored and this method will return normally.
+        /// </remarks>
+        public async Task EnqueueAsync(T item, CancellationToken cancellationToken)
+        {
+            var link = await EnsureGetUncounted(inputs, cancellationToken);
             link.SetResult(item);
         }
 
@@ -224,11 +263,11 @@ namespace FallDave.EhSync
         // Add unused links to the queue until at least count unused links are available on inputs
         // and outputs. This is "Grow To" and not "Grow By" to prevent several tasks from lining up
         // and each adding the entire count.
-        private async Task GrowTo(int count)
+        private async Task GrowTo(int count, CancellationToken cancellationToken = default(CancellationToken))
         {
             if (count >= 0)
             {
-                await producer.AddRangeAsync(GenerateLinksToAdd(count));
+                await producer.AddRangeAsync(GenerateLinksToAdd(count), cancellationToken);
             }
         }
 
@@ -259,6 +298,21 @@ namespace FallDave.EhSync
             while (!queue.TryDequeue(out link))
             {
                 await GrowTo(growthIncrement);
+            }
+
+            return link;
+        }
+
+        // Dequeues an element from queue, calling GrowTo(growAmount) to add unused links if
+        // needed. Does not update ready counts. The cancellation token can be used to give up
+        // before the grow operation finishes.
+        private async Task<TaskCompletionSource<T>> EnsureGetUncounted(ConcurrentQueue<TaskCompletionSource<T>> queue, CancellationToken cancellationToken)
+        {
+            TaskCompletionSource<T> link;
+
+            while (!queue.TryDequeue(out link))
+            {
+                await GrowTo(growthIncrement, cancellationToken);
             }
 
             return link;

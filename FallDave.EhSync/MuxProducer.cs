@@ -119,6 +119,13 @@ namespace FallDave.EhSync
             return AddRangeThenRelease(items);
         }
 
+        public async Task<int> AddRangeAsync(IEnumerable<T> items, CancellationToken cancellationToken = default(CancellationToken))
+        {
+            ItemsNotNull(items);
+            await semaphore.WaitAsync(cancellationToken);
+            return AddRangeThenRelease(items);
+        }
+
         public int Add(params T[] items)
         {
             ItemsNotNull(items);
@@ -141,5 +148,15 @@ namespace FallDave.EhSync
             return AddRangeThenRelease(items);
         }
 
+        public async Task<int> AddAsync(CancellationToken cancellationToken, params T[] items)
+        {
+            ItemsNotNull(items);
+            if (items.Length == 0)
+            {
+                return 0;
+            }
+            await semaphore.WaitAsync(cancellationToken);
+            return AddRangeThenRelease(items);
+        }
     }
 }
